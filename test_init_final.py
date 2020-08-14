@@ -1013,14 +1013,11 @@ async def on_ready():
 	
 	global endTime
 	global setting_channel_name
-	global all_guilds
 			
 	print("Logged in as ") #화면에 봇의 아이디, 닉네임이 출력됩니다.
 	print(client.user.name)
 	print(client.user.id)
 	print("===========")
-	
-	all_guilds = client.guilds
 
 	channel_name, channel_id, channel_voice_name, channel_voice_id = await get_guild_channel_info()
 
@@ -1159,7 +1156,7 @@ while True:
 
 			chflg = 1
 		else:
-			for guild in all_guilds:
+			for guild in client.guilds:
 				for text_channel in guild.text_channels:
 					if basicSetting[7] == text_channel.id:
 						curr_guild_info = guild
@@ -1220,6 +1217,8 @@ while True:
 			command_list += ','.join(command[11]) + ' [인원] [금액]\n'     #!분배
 			command_list += ','.join(command[12]) + ' [뽑을인원수] [아이디1] [아이디2]...\n'     #!사다리
 			command_list += ','.join(command[27]) + ' [아이디1] [아이디2]...(최대 12명)\n'     #!경주
+			command_list += ','.join(command[35]) + ' [판매금액] (거래소세금)\n'     #!수수료
+			command_list += ','.join(command[36]) + ' [거래소금액] [실거래금액] (거래소세금)\n'     #!페이백
 			command_list += ','.join(command[13]) + ' [아이디]\n'     #!정산
 			command_list += ','.join(command[14]) + ' 또는 ' + ','.join(command[14]) + ' 0000, 00:00\n'     #!보스일괄
 			command_list += ','.join(command[15]) + '\n'     #!q
@@ -1305,21 +1304,32 @@ while True:
 
 			ch_information = []
 			cnt = 0
-			ch_information.append('')
-			for i in range(len(channel_name)):
-				if len(ch_information[cnt]) > 900 :
-					ch_information.append('')
-					cnt += 1
-				ch_information[cnt] = ch_information[cnt] + '[' + channel_id[i] + '] ' + channel_name[i] + '\n'
+			ch_information.append("")
 
 			ch_voice_information = []
 			cntV = 0
-			ch_voice_information.append('')
-			for i in range(len(channel_voice_name)):
-				if len(ch_voice_information[cntV]) > 900 :
-					ch_voice_information.append('')
-					cntV += 1
-				ch_voice_information[cntV] = ch_voice_information[cntV] + '[' + channel_voice_id[i] + '] ' + channel_voice_name[i] + '\n'
+			ch_voice_information.append("")
+
+			for guild in client.guilds:
+				ch_information[cnt] = f"{ch_information[cnt]}👑  {guild.name}  👑\n"
+				for i in range(len(channel_name)):
+					for text_channel in guild.text_channels:
+						if channel_id[i] == str(text_channel.id):
+							if len(ch_information[cnt]) > 900 :
+								ch_information.append("")
+								cnt += 1
+							ch_information[cnt] = f"{ch_information[cnt]}[{channel_id[i]}] {channel_name[i]}\n"
+
+				ch_voice_information[cntV] = f"{ch_voice_information[cntV]}👑  {guild.name}  👑\n"
+				for i in range(len(channel_voice_name)):
+					for voice_channel in guild.voice_channels:
+						if channel_voice_id[i] == str(voice_channel.id):
+							if len(ch_voice_information[cntV]) > 900 :
+								ch_voice_information.append("")
+								cntV += 1
+							ch_voice_information[cntV] = f"{ch_voice_information[cntV]}[{channel_voice_id[i]}] {channel_voice_name[i]}\n"
+					
+			######################
 
 			if len(ch_information) == 1 and len(ch_voice_information) == 1:
 				embed = discord.Embed(
@@ -2654,16 +2664,37 @@ while True:
 			if not args:
 				sorted_item_list = sorted(item_Data.items(), key=lambda x: x[0])
 
+				embed_list : list = []
+				embed_index : int = 0
+				embed_cnt : int = 0
 				embed = discord.Embed(title = '', description = f'`{client.user.name}\'s 창고`', color = 0x00ff00)
+				
+				embed_list.append(embed)
 
 				if len(sorted_item_list) > 0 :
 					for item_id, count in sorted_item_list:
-						embed.add_field(name = item_id, value = count)
+						embed_cnt += 1
+						if embed_cnt > 24 :
+							embed_cnt = 0
+							embed_index += 1
+							tmp_embed = discord.Embed(
+								title = "",
+								description = "",
+								color=0x00ff00
+								)
+							embed_list.append(tmp_embed)
+						embed_list[embed_index].add_field(name = item_id, value = count)
+					embed_list[len(embed_list)-1].set_footer(text = f"전체 아이템 종류  :  {len(item_Data)}개")
+					if len(embed_list) > 1:
+						for embed_data in embed_list:
+							await asyncio.sleep(0.1)
+							await ctx.send(embed = embed_data)
+						return
+					else:
+						return await ctx.send(embed=embed, tts=False)
 				else :
 					embed.add_field(name = '\u200b\n', value = '창고가 비었습니다.\n\u200b')
-
-				embed.set_footer(text = f"전체 아이템 종류  :  {len(item_Data)}개")
-				return await ctx.send(embed=embed, tts=False)
+					return await ctx.send(embed=embed, tts=False)
 
 			input_data = args.split()
 			
@@ -2761,41 +2792,120 @@ while True:
 	@commands.has_permissions(manage_messages=True)
 	@client.command(name=command[34][0], aliases=command[34][1:])
 	async def leaveGuild_(ctx):
-		global all_guilds
+		if ctx.message.channel.id == basicSetting[7]:
+			guild_list : str = ""
+			guild_name : str = ""
 
-		guild_list : str = ""
+			for i, gulid_name in enumerate(client.guilds):
+				guild_list += f"`{i+1}.` {gulid_name}\n"
 
-		for i, gulid_name in enumerate(all_guilds):
-			guild_list += f"`{i+1}.` {gulid_name}\n"
+			embed = discord.Embed(
+				title = "----- 서버 목록 -----",
+				description = guild_list,
+				color=0x00ff00
+				)
+			await ctx.send(embed = embed)
 
-		embed = discord.Embed(
-			title = "----- 길드 목록 -----",
-			description = guild_list,
-			color=0x00ff00
-			)
-		await ctx.send(embed = embed)
+			try:
+				await ctx.send(f"```떠나고 싶은 서버의 [숫자]를 입력하여 선택해 주세요```")
+				message_result : discord.Message = await client.wait_for("message", timeout = 10, check=(lambda message: message.channel == ctx.message.channel and message.author == ctx.message.author))
+			except asyncio.TimeoutError:
+				return await ctx.send(f"```서버 선택 시간이 초과됐습니다! 필요시 명령어를 재입력해 주세요```")
+				
+			try:
+				guild_name = client.guilds[int(message_result.content)-1].name
+				await client.get_guild(client.guilds[int(message_result.content)-1].id).leave()
+				return await ctx.send(f"```[{guild_name}] 서버에서 떠났습니다.!```")
+			except ValueError:
+				return			
 
-		try:
-			await ctx.send(f"```떠나고 싶은 서버의 [숫자]를 입력하여 선택해 주세요```")
-			message_result : discord.Message = await client.wait_for("message", timeout = 10, check=(lambda message: message.channel == ctx.message.channel and message.author == ctx.message.author))
-		except asyncio.TimeoutError:
-			return await ctx.send(f"```서버 선택 시간이 초과됐습니다! 필요시 명령어를 재입력해 주세요```")
+	################ 수수료 계산기 ################ 
+	@client.command(name=command[35][0], aliases=command[35][1:])
+	async def tax_check(ctx, *, args : str = None):
+		if ctx.message.channel.id == basicSetting[7] or ctx.message.channel.id == basicSetting[22]:
+			if not args:
+				return await ctx.send(f"**{command[35][0]} [판매금액] (거래소세금)** 양식으로 입력 해주세요\n※ 거래소세금은 미입력시 5%입니다.")
 			
-		await client.get_guild(all_guilds[int(message_result.content)-1].id).leave()
+			input_money_data : list = args.split()
+			len_input_money_data = len(input_money_data)
 
-		all_guilds = client.guilds
+			try:
+				for i in range(len_input_money_data):
+					input_money_data[i] = int(input_money_data[i])
+			except ValueError:
+				return await ctx.send(f"**[판매금액] (거래소세금)**은 숫자로 입력 해주세요.")
 
-		guild_list : str = ""
+			if len_input_money_data < 1 or len_input_money_data > 3:
+				return await ctx.send(f"**{command[35][0]} [판매금액] (거래소세금)** 양식으로 입력 해주세요\n※ 거래소세금은 미입력시 5%입니다.")
+			elif len_input_money_data == 2:
+				tax = input_money_data[1]
+			else:
+				tax = 5
 
-		for i, gulid_name in enumerate(all_guilds):
-			guild_list += f"`{i+1}.` {gulid_name}\n"
+			price_first_tax = int(input_money_data[0] * ((100-tax)/100))
+			price_second_tax = int(price_first_tax * ((100-tax)/100))
+			price_rev_tax = int((input_money_data[0] * 100)/(100-tax)+0.5)
 
-		embed = discord.Embed(
-			title = "----- 길드 목록 -----",
-			description = guild_list,
-			color=0x00ff00
-			)
-		await ctx.send(embed = embed)
+			embed = discord.Embed(
+					title = f"🧮  수수료 계산결과 (세율 {tax}% 기준) ",
+					description = f"",
+					color=0x00ff00
+					)
+			embed.add_field(name = "⚖️ 수수료 지원", value = f"```등록가 : {price_rev_tax}\n수령가 : {input_money_data[0]}\n세 금 : {price_rev_tax-input_money_data[0]}```")
+			embed.add_field(name = "⚖️ 1차 거래", value = f"```등록가 : {input_money_data[0]}\n정산가 : {price_first_tax}\n세 금 : {input_money_data[0]-price_first_tax}```")
+			embed.add_field(name = "⚖️ 2차 거래", value = f"```등록가 : {price_first_tax}\n정산가 : {price_second_tax}\n세 금 : {price_first_tax-price_second_tax}```")
+			return await ctx.send(embed = embed)
+		else:
+			return
+
+	################ 페이백 계산기 ################ 
+	@client.command(name=command[36][0], aliases=command[36][1:])
+	async def payback_check(ctx, *, args : str = None):
+		if ctx.message.channel.id == basicSetting[7] or ctx.message.channel.id == basicSetting[22]:
+			if not args:
+				return await ctx.send(f"**{command[36][0]} [거래소가격] [실거래가] (거래소세금)** 양식으로 입력 해주세요\n※ 거래소세금은 미입력시 5%입니다.")
+			
+			input_money_data : list = args.split()
+			len_input_money_data = len(input_money_data)
+
+			try:
+				for i in range(len_input_money_data):
+					input_money_data[i] = int(input_money_data[i])
+			except ValueError:
+				return await ctx.send(f"**[판매금액] (거래소세금)**은 숫자로 입력 해주세요.")
+
+			if len_input_money_data < 2 or len_input_money_data > 4:
+				return await ctx.send(f"**{command[36][0]} [거래소가격] [실거래가] (거래소세금)** 양식으로 입력 해주세요\n※ 거래소세금은 미입력시 5%입니다.")
+			elif len_input_money_data == 3:
+				tax = input_money_data[2]
+			else:
+				tax = 5
+
+			price_reg_tax = int(input_money_data[0] * ((100-tax)/100))
+			price_real_tax = int(input_money_data[1] * ((100-tax)/100))
+
+			reault_payback = price_reg_tax - price_real_tax
+			reault_payback1= price_reg_tax - input_money_data[1]
+
+			embed = discord.Embed(
+					title = f"🧮  페이백 계산결과1 (세율 {tax}% 기준) ",
+					description = f"**```fix\n{reault_payback}```**",
+					color=0x00ff00
+					)
+			embed.add_field(name = "⚖️ 거래소", value = f"```등록가 : {input_money_data[0]}\n정산가 : {price_reg_tax}\n세 금 : {input_money_data[0]-price_reg_tax}```")
+			embed.add_field(name = "🕵️ 실거래", value = f"```등록가 : {input_money_data[1]}\n정산가 : {price_real_tax}\n세 금 : {input_money_data[1]-price_real_tax}```")
+			await ctx.send(embed = embed)
+
+			embed2 = discord.Embed(
+					title = f"🧮  페이백 계산결과2 (세율 {tax}% 기준) ",
+					description = f"**```fix\n{reault_payback1}```**",
+					color=0x00ff00
+					)
+			embed2.add_field(name = "⚖️ 거래소", value = f"```등록가 : {input_money_data[0]}\n정산가 : {price_reg_tax}\n세 금 : {input_money_data[0]-price_reg_tax}```")
+			embed2.add_field(name = "🕵️ 실거래", value = f"```내판가 : {input_money_data[1]}```")
+			return await ctx.send(embed = embed2)
+		else:
+			return
 
 	################ ?????????????? ################ 
 	@client.command(name='!오빠')
